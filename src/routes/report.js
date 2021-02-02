@@ -9,11 +9,10 @@ module.exports = (app) => {
         app.services.report.getFileByIdRequest(idRequest)
             .then( async (result) => {
                 req.body.file = result
-               await res.download(result)
-                next()
+               res.download(result)
+               const deletedFilePaths = await app.deleteFile(['./temp/*.txt']);
+                res.status(206).end()
             })
-        app.use(deleteFile)
-        
         }
     return { getFileByIdRequest }
 }

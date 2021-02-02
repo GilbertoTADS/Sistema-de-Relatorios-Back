@@ -1,7 +1,31 @@
 module.exports = (app) => {
+    const directory = './temp'
+    let res;
+
+    const fileError = async () => {
+        const message = `Há campos obrigátórios que não foram preenchidos.\nPara gerar este relatório acesse os dados do pedido, verifique os que estão vazios e os preencha.\nFeito isso, tente novamente.`
+        try{
+            const res = await app.fs.appendFileSync(`${directory}/LEIA.txt`,message)
+            console.log("file",res)
+            return {response:'error',file:`${directory}/LEIA.txt`}
+        }catch(err){
+            return { response:err }
+        } 
+    }
+    const verifyData = async (arr) => {
+        for(let i =0;i<=arr.length-1;i++){
+            for(idx in arr[i]){
+                if(!arr[i][idx]){
+                  const file = await fileError()
+                  return file
+                }
+            }
+        }
+        return { response:'success'};
+    }
 
     const getFileByIdRequest = async (db, idRequest) => {
-        const directory = './temp'
+        
         idRequest = idRequest.toString()
         const str = `SELECT
                         pc.IDPEDIDO,
@@ -24,7 +48,10 @@ module.exports = (app) => {
        const row1 = await db
             .then( async(conn) => {
                 return await conn.query(str)
-            } )
+            } ).catch( err => console.log(err))
+
+        res = await verifyData(row1)
+        if(res.file) return res.file
         //Line One
         let lineOne = "019  001"
         let number_request = row1[0].IDPEDIDO
@@ -59,7 +86,6 @@ module.exports = (app) => {
         let dt_expiration = app.moment(row1[0].DTVENCIMENTO)
         let dt_duration = app.moment.duration(dt_base.diff(dt_expiration))
         let days = dt_duration.asDays().toString().replace(/-/g,"").padStart(3,"0")
-            console.log("TESTE:---",row1[0].DTVENCIMENTO)
         let date_expiration_formated = row1[0].DTVENCIMENTO.toString().replace(/-/g,"")
         
         let duplicate_value =  row1[0].VALDUPLICATA.toString().replace(",","").padStart(15,"0")
@@ -69,12 +95,7 @@ module.exports = (app) => {
         
         id_req = idRequest.padStart(13,"0")
         let file = `SHERWIN_001_${id_req}`         
-        app.fs.appendFile(`${directory}/${file}.txt`,
-        `${lineOneFull}
-${lineTwoFull}`,(error, file)=>{
-          if (error) throw error;
-        })
-
+        await app.fs.appendFileSync(`${directory}/${file}.txt`,`${lineOneFull}\n${lineTwoFull}`)
         //Line Four
         const str2 = `SELECT
                         pcp.IDPRODUTO,
@@ -83,9 +104,7 @@ ${lineTwoFull}`,(error, file)=>{
                         pcp.VALIPI,
                         pcp.PERIPI,
                         pv.IDCODBARPROD,
-                        TRANSLATE(pv.DESCRICAOPRODUTO,
-                            'AAAAaaaaEEEeeeIIiiCc',
-                            'ÁÀÂÃáàâãÉÈÊéèêÍÌíìÇç') AS DESCRICAOPRODUTO,
+                        pv.DESCRICAOPRODUTO,
                         SUM(pcp.VALUNITARIO*pcp.QTDSOLICITADA ) AS PROD_X_QUANT
                     FROM 
                         PEDIDO_COMPRA_PROD AS pcp 
@@ -101,12 +120,15 @@ ${lineTwoFull}`,(error, file)=>{
                         pcp.PERIPI,
                         pv.IDCODBARPROD,
                         pv.DESCRICAOPRODUTO`
-                        
+
        const row2 = await db
             .then( async(conn) => {
                 return await conn.query(str2)
             } )
-            console.log(row2[0].DESCRICAOPRODUTO)
+
+        res = await verifyData(row2)
+        if(res.file) return res.file
+            
         let lineFour = '04'
         let lineFourFull = []
         let count = 0
@@ -152,11 +174,8 @@ ${lineTwoFull}`,(error, file)=>{
             lineFourFull[index] = `${lineFour}${idx_items[index]}${idx_items2[index]}${branco3}${EN}${barcodes[index]}${description_items[index]}${white20}${constanteEA}${multiplo_compra}${qtt_items[index]}${zero15}${zero15}${white03}${zero5}`
         })
 
-        lineFourFull.forEach((value, idx)=>{
-            app.fs.appendFile(`${directory}/${file}.txt`,`
-${lineFourFull[idx]}`,(error, file)=>{
-            if (error) throw error;
-            })
+        lineFourFull.forEach(async (value, idx)=>{
+            await app.fs.appendFileSync(`${directory}/${file}.txt`,`\n${lineFourFull[idx]}`)
         })
 
         //Line Nine
@@ -165,10 +184,7 @@ ${lineFourFull[idx]}`,(error, file)=>{
         let sum_of_all_products = sum_of_all_prod.toString().replace('.','').padStart(15,'0')
         let sum_ipi_and_all_prod = ((parseInt(somatoria_total_IPI) + parseInt(sum_of_all_prod.toString().replace('.','')))).toString().padStart(15,'0')
         
-        app.fs.appendFile(`${directory}/${file}.txt`,`
-${lineNine}${somatoria_total_IPI}${sum_of_all_products}${zero15}${zero15}${zero15}${zero15}${zero15}${sum_ipi_and_all_prod}`,(error, file)=>{
-            if (error) throw error;
-            })
+        await app.fs.appendFileSync(`${directory}/${file}.txt`,`\n${lineNine}${somatoria_total_IPI}${sum_of_all_products}${zero15}${zero15}${zero15}${zero15}${zero15}${sum_ipi_and_all_prod}`)
         
         const nameFile = `SHERWIN_001_${idRequest.toString().padStart(13,'0')}.txt`
         const adressFile = `./temp/${nameFile}`
